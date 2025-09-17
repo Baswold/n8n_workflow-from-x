@@ -1,0 +1,353 @@
+{
+  "name": "60-Second Lead Response Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-form",
+        "responseMode": "lastNode",
+        "responseData": "allEntries"
+      },
+      "id": "webhook-node",
+      "name": "Form Submission",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [260, 300],
+      "webhookId": "lead-response-webhook"
+    },
+    {
+      "parameters": {
+        "operation": "lookup",
+        "documentId": "YOUR_GOOGLE_SHEET_ID",
+        "sheetName": "Leads",
+        "lookupColumn": "Email",
+        "lookupValue": "={{ $json.email }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "values": [
+            {
+              "column": "Name"
+            },
+            {
+              "column": "Email"
+            },
+            {
+              "column": "Status"
+            },
+            {
+              "column": "Last_Contact"
+            }
+          ]
+        }
+      },
+      "id": "sheets-lookup",
+      "name": "Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [480, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credentials",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "existing-lead-check",
+              "leftValue": "={{ $json.Email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "filter-node",
+      "name": "Filter",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.Email }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "exists"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "existing_lead"
+            }
+          ]
+        },
+        "fallbackOutput": "new_lead"
+      },
+      "id": "switch-node", 
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $('Form Submission').item.json.email }}",
+        "subject": "🎉 Welcome! Your inquiry was received",
+        "emailType": "html",
+        "message": "<h2>Thanks for your interest!</h2><p>Hi {{ $('Form Submission').item.json.name || 'there' }},</p><p>I got your message and wanted to respond immediately! Here's what happens next:</p><ul><li>I'll personally review your inquiry within the next few minutes</li><li>You'll get a detailed response with next steps shortly</li><li>In the meantime, feel free to check out [your resource/calendar link]</li></ul><p>Talk soon!</p><p>[Your Name]</p>"
+      },
+      "id": "gmail-new",
+      "name": "Gmail - New Lead",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1140, 180],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-credentials",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message", 
+        "operation": "send",
+        "sendTo": "={{ $('Form Submission').item.json.email }}",
+        "subject": "Great to hear from you again!",
+        "emailType": "html",
+        "message": "<h2>Thanks for reaching out again!</h2><p>Hi {{ $('Form Submission').item.json.name || $json.Name }},</p><p>I see we've connected before. I wanted to respond right away to your new inquiry.</p><p>Let me review your previous interaction and I'll send you a personalized follow-up within the next few minutes.</p><p>Appreciate your continued interest!</p><p>[Your Name]</p>"
+      },
+      "id": "gmail-existing",
+      "name": "Gmail - Existing Lead", 
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1140, 420],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-credentials", 
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "YOUR_GOOGLE_SHEET_ID",
+        "sheetName": "Leads",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "values": [
+            {
+              "column": "Name",
+              "value": "={{ $('Form Submission').item.json.name }}"
+            },
+            {
+              "column": "Email", 
+              "value": "={{ $('Form Submission').item.json.email }}"
+            },
+            {
+              "column": "Phone",
+              "value": "={{ $('Form Submission').item.json.phone }}"
+            },
+            {
+              "column": "Message",
+              "value": "={{ $('Form Submission').item.json.message }}"
+            },
+            {
+              "column": "Timestamp",
+              "value": "={{ $now() }}"
+            },
+            {
+              "column": "Status",
+              "value": "New Lead - Auto Response Sent"
+            }
+          ]
+        }
+      },
+      "id": "sheets-append",
+      "name": "Add to Sheets",
+      "type": "n8n-nodes-base.googleSheets", 
+      "typeVersion": 4,
+      "position": [1360, 180],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credentials",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      },
+      "id": "merge-node",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1580, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send", 
+        "sendTo": "YOUR_EMAIL@domain.com",
+        "subject": "🚨 New Lead Alert - {{ $('Form Submission').item.json.name }}",
+        "emailType": "html",
+        "message": "<h2>New Lead Received!</h2><p><strong>Name:</strong> {{ $('Form Submission').item.json.name }}</p><p><strong>Email:</strong> {{ $('Form Submission').item.json.email }}</p><p><strong>Phone:</strong> {{ $('Form Submission').item.json.phone }}</p><p><strong>Message:</strong></p><p>{{ $('Form Submission').item.json.message }}</p><p><strong>Received:</strong> {{ $now() }}</p><p>Auto-response has been sent. Follow up personally ASAP!</p>"
+      },
+      "id": "gmail-notification",
+      "name": "Gmail - Alert You",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,  
+      "position": [1800, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-credentials",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Form Submission": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Filter", 
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main", 
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Existing Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gmail - New Lead",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Add to Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - New Lead": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Existing Lead": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main", 
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Add to Sheets": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Alert You",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-19T10:00:00.000Z",
+  "versionId": "1"
+}
